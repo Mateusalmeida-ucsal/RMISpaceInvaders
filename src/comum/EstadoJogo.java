@@ -17,6 +17,9 @@ public class EstadoJogo implements Serializable {
     public final List<Jogador> jogadores = new ArrayList<>();
     public final List<Invasor> invasores = new ArrayList<>();
     public final List<Projetil> projeteis = new ArrayList<>();
+    public final List<Barreira> barreiras = new ArrayList<>();
+    /** Eventos ocorridos desde o snapshot anterior (usados pelo cliente para tocar sons). */
+    public final List<Evento> eventos = new ArrayList<>();
 
     public EstadoJogo(EstadoPartida estadoPartida, int nivel, String mensagem) {
         this.estadoPartida = estadoPartida;

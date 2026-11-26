@@ -1,6 +1,7 @@
 package cliente;
 
 import comum.Acao;
+import comum.Barreira;
 import comum.Constantes;
 import comum.EstadoJogo;
 import comum.EstadoPartida;
@@ -53,6 +54,7 @@ public class TelaJogo extends JPanel {
     private static final Color COR_J1 = new Color(0, 255, 0);
     private static final Color COR_J2 = new Color(0, 220, 255);
     private static final Color COR_TEXTO = Color.WHITE;
+    private static final Color COR_BARREIRA = Color.WHITE; // troque por new Color(0, 255, 0) para barreira verde
 
     private static final BufferedImage[][] INVASORES = new BufferedImage[3][2];
     private static final BufferedImage CANHAO_J1 = criarSprite(CANHAO_PIXELS, COR_J1);
@@ -128,6 +130,12 @@ public class TelaJogo extends JPanel {
                     reiniciar = true;
                 }
                 break;
+            case KeyEvent.VK_M:
+                if (pressionada) {
+                    Audio.alternarMudo();
+                    repaint();
+                }
+                break;
             default:
                 break;
         }
@@ -157,6 +165,7 @@ public class TelaJogo extends JPanel {
                     }
                 } catch (RemoteException e) {
                     conexaoPerdida = true;
+                    Audio.pararMusica();
                     repaint();
                     return;
                 }
@@ -240,6 +249,10 @@ public class TelaJogo extends JPanel {
         String pts2 = String.format("%04d", j2 == null ? 0 : j2.pontos);
         g.drawString(pts2, Constantes.LARGURA - 20 - fm.stringWidth(pts2), 48);
 
+        if (Audio.isMudo()) {
+            textoCentral(g, "SOM DESLIGADO (M)", 590, 14, Color.GRAY);
+        }
+
         // linha do chão e vidas (um canhãozinho por vida, como no original)
         g.setColor(COR_J1);
         g.fillRect(0, 565, Constantes.LARGURA, 2);
@@ -259,7 +272,29 @@ public class TelaJogo extends JPanel {
         }
     }
 
+    private void desenharBarreiras(Graphics2D g, EstadoJogo e) {
+        final int cel = Constantes.BARREIRA_CELULA;
+        g.setColor(COR_BARREIRA);
+        for (Barreira b : e.barreiras) {
+            for (int lin = 0; lin < Constantes.BARREIRA_LINHAS; lin++) {
+                int col = 0;
+                while (col < Constantes.BARREIRA_COLUNAS) {
+                    if (!b.viva(col, lin)) {
+                        col++;
+                        continue;
+                    }
+                    int inicio = col; // junta células vizinhas da mesma linha em um retângulo só
+                    while (col < Constantes.BARREIRA_COLUNAS && b.viva(col, lin)) {
+                        col++;
+                    }
+                    g.fillRect(b.x + inicio * cel, b.y + lin * cel, (col - inicio) * cel, cel);
+                }
+            }
+        }
+    }
+
     private void desenharElementos(Graphics2D g, EstadoJogo e) {
+        desenharBarreiras(g, e);
         // Invasores: o quadro de animação alterna a cada passo (posição x muda de 10 em 10)
         for (Invasor i : e.invasores) {
             int frame = Math.abs(i.x / Constantes.INV_PASSO_X) % 2;

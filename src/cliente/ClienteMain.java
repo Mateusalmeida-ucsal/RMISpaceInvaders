@@ -36,6 +36,10 @@ public class ClienteMain {
         }
         host = host.trim();
 
+        // Os sons precisam estar prontos antes de conectar: assim que o 2º jogador entra,
+        // o servidor já começa a partida e a trilha deve tocar desde o primeiro quadro.
+        Audio.iniciar();
+
         ClienteCallbackImpl callback = null;
         try {
             // O servidor chama o cliente de volta (callback), então o cliente precisa
@@ -81,6 +85,7 @@ public class ClienteMain {
             @Override
             public void windowClosing(WindowEvent e) {
                 tela.encerrar();
+                Audio.fechar();
                 try {
                     UnicastRemoteObject.unexportObject(callback, true);
                 } catch (Exception ex) {

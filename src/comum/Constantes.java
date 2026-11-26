@@ -39,6 +39,13 @@ public final class Constantes {
     public static final int INV_INICIO_X = 40;
     public static final int INV_INICIO_Y = 60;
 
+    // Barreiras (bunkers)
+    public static final int BARREIRA_QTD = 4;
+    public static final int BARREIRA_COLUNAS = 22;
+    public static final int BARREIRA_LINHAS = 16;
+    public static final int BARREIRA_CELULA = 3;   // tamanho de cada "pixel" da barreira
+    public static final int BARREIRA_Y = 450;
+
     // Projéteis
     public static final int TIRO_LARGURA = 4;
     public static final int TIRO_ALTURA = 12;

@@ -1,9 +1,11 @@
 package servidor;
 
 import comum.Acao;
+import comum.Barreira;
 import comum.ClientCallback;
 import comum.Constantes;
 import comum.EstadoJogo;
+import comum.Evento;
 import comum.EstadoPartida;
 import comum.GameService;
 import comum.Invasor;
@@ -52,6 +54,8 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
     private final Map<Integer, Sessao> sessoes = new HashMap<>();
     private final List<Invasor> invasores = new ArrayList<>();
     private final List<Projetil> projeteis = new ArrayList<>();
+    private final List<Barreira> barreiras = new ArrayList<>();
+    private final List<Evento> eventos = new ArrayList<>(); // eventos desde o último snapshot
     private EstadoPartida estado = EstadoPartida.AGUARDANDO_JOGADORES;
     private String mensagem = "Aguardando jogadores...";
     private int nivel = 1;
@@ -136,6 +140,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                         int tx = j.x + Constantes.NAVE_LARGURA / 2 - Constantes.TIRO_LARGURA / 2;
                         projeteis.add(new Projetil(idJogador, tx, j.y - Constantes.TIRO_ALTURA));
                         s.ultimoTiro = agora;
+                        eventos.add(Evento.TIRO_JOGADOR);
                     }
                     break;
             }
@@ -187,6 +192,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         contadorPasso = 0;
         projeteis.clear();
         criarInvasores();
+        criarBarreiras();
         for (Sessao s : sessoes.values()) {
             int id = s.jogador.id;
             Jogador novo = new Jogador(id, id == 1 ? 200 : 560);
@@ -216,6 +222,17 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         }
     }
 
+    /** Distribui as barreiras igualmente na largura do campo. */
+    private void criarBarreiras() {
+        barreiras.clear();
+        int espaco = Constantes.LARGURA / Constantes.BARREIRA_QTD;
+        int larguraBarreira = Constantes.BARREIRA_COLUNAS * Constantes.BARREIRA_CELULA;
+        for (int i = 0; i < Constantes.BARREIRA_QTD; i++) {
+            int x = i * espaco + (espaco - larguraBarreira) / 2;
+            barreiras.add(new Barreira(x, Constantes.BARREIRA_Y));
+        }
+    }
+
     private void tratarDesconexao(int idJogador, String motivo) {
         synchronized (trava) {
             Sessao removida = sessoes.remove(idJogador);
@@ -240,6 +257,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                 mensagem = "Aguardando jogadores...";
                 invasores.clear();
                 projeteis.clear();
+                barreiras.clear();
                 nivel = 1;
             }
         }
@@ -263,6 +281,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                     snapshot = criarSnapshot();
                     destinatarios = new ArrayList<>(sessoes.values());
                 }
+                eventos.clear(); // cada evento vai em um único snapshot
             }
 
             // Fora da região sincronizada: chamadas remotas
@@ -312,6 +331,10 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         for (Projetil p : projeteis) {
             snap.projeteis.add(new Projetil(p));
         }
+        for (Barreira b : barreiras) {
+            snap.barreiras.add(new Barreira(b));
+        }
+        snap.eventos.addAll(eventos);
         return snap;
     }
 
@@ -328,6 +351,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         moverProjeteis();
         invasoresAtiram();
         moverInvasores();
+        invasoresDestroemBarreiras();
         tratarColisoes();
         verificarFimOuProximaOnda();
     }
@@ -407,12 +431,19 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         projeteis.add(new Projetil(0,
                 atirador.x + Constantes.INV_LARGURA / 2 - Constantes.TIRO_LARGURA / 2,
                 atirador.y + Constantes.INV_ALTURA));
+        eventos.add(Evento.TIRO_INVASOR);
     }
 
     private void tratarColisoes() {
         Iterator<Projetil> itP = projeteis.iterator();
         while (itP.hasNext()) {
             Projetil p = itP.next();
+
+            // qualquer tiro (de jogador ou de invasor) é parado pela barreira
+            if (tiroAtingiuBarreira(p)) {
+                itP.remove();
+                continue;
+            }
 
             if (p.isDoJogador()) {
                 // tiro do jogador x invasores
@@ -423,6 +454,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                             i.x, i.y, Constantes.INV_LARGURA, Constantes.INV_ALTURA)) {
                         itI.remove();
                         itP.remove();
+                        eventos.add(Evento.INVASOR_ELIMINADO);
                         Sessao dono = sessoes.get(p.dono);
                         if (dono != null) {
                             dono.jogador.pontos += i.pontos;
@@ -440,6 +472,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                     if (colide(p.x, p.y, Constantes.TIRO_LARGURA, Constantes.TIRO_ALTURA,
                             j.x, j.y, Constantes.NAVE_LARGURA, Constantes.NAVE_ALTURA)) {
                         itP.remove();
+                        eventos.add(Evento.JOGADOR_ATINGIDO);
                         j.vidas--;
                         if (j.vidas <= 0) {
                             j.vidas = 0;
@@ -448,6 +481,77 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                             j.invulneravelTicks = Constantes.INVULNERAVEL_TICKS;
                         }
                         break;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Procura a célula viva de barreira mais "à frente" do tiro (a primeira que ele
+     * encontraria) e destrói um pedaço ao redor dela. Retorna true se houve acerto.
+     */
+    private boolean tiroAtingiuBarreira(Projetil p) {
+        final int cel = Constantes.BARREIRA_CELULA;
+        for (Barreira b : barreiras) {
+            if (!colide(p.x, p.y, Constantes.TIRO_LARGURA, Constantes.TIRO_ALTURA,
+                    b.x, b.y, b.largura(), b.altura())) {
+                continue;
+            }
+            int colIni = Math.max(0, Math.floorDiv(p.x - b.x, cel));
+            int colFim = Math.min(Constantes.BARREIRA_COLUNAS - 1,
+                    Math.floorDiv(p.x + Constantes.TIRO_LARGURA - 1 - b.x, cel));
+            int linIni = Math.max(0, Math.floorDiv(p.y - b.y, cel));
+            int linFim = Math.min(Constantes.BARREIRA_LINHAS - 1,
+                    Math.floorDiv(p.y + Constantes.TIRO_ALTURA - 1 - b.y, cel));
+
+            // tiro do jogador sobe (encontra primeiro as linhas de baixo);
+            // tiro do invasor desce (encontra primeiro as linhas de cima)
+            boolean sobe = p.isDoJogador();
+            int linha = sobe ? linFim : linIni;
+            while (sobe ? linha >= linIni : linha <= linFim) {
+                for (int col = colIni; col <= colFim; col++) {
+                    if (b.viva(col, linha)) {
+                        erodirBarreira(b, col, linha);
+                        return true;
+                    }
+                }
+                linha += sobe ? -1 : 1;
+            }
+        }
+        return false;
+    }
+
+    /** Destrói um "buraco" irregular em volta do ponto de impacto. */
+    private void erodirBarreira(Barreira b, int colCentro, int linCentro) {
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                boolean perto = Math.abs(dx) + Math.abs(dy) <= 2;
+                if (perto || random.nextBoolean()) {
+                    b.destruir(colCentro + dx, linCentro + dy);
+                }
+            }
+        }
+    }
+
+    /** Invasor que encosta na barreira apaga tudo que ele toca. */
+    private void invasoresDestroemBarreiras() {
+        final int cel = Constantes.BARREIRA_CELULA;
+        for (Invasor i : invasores) {
+            for (Barreira b : barreiras) {
+                if (!colide(i.x, i.y, Constantes.INV_LARGURA, Constantes.INV_ALTURA,
+                        b.x, b.y, b.largura(), b.altura())) {
+                    continue;
+                }
+                int colIni = Math.max(0, Math.floorDiv(i.x - b.x, cel));
+                int colFim = Math.min(Constantes.BARREIRA_COLUNAS - 1,
+                        Math.floorDiv(i.x + Constantes.INV_LARGURA - 1 - b.x, cel));
+                int linIni = Math.max(0, Math.floorDiv(i.y - b.y, cel));
+                int linFim = Math.min(Constantes.BARREIRA_LINHAS - 1,
+                        Math.floorDiv(i.y + Constantes.INV_ALTURA - 1 - b.y, cel));
+                for (int lin = linIni; lin <= linFim; lin++) {
+                    for (int col = colIni; col <= colFim; col++) {
+                        b.destruir(col, lin);
                     }
                 }
             }
@@ -480,6 +584,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             contadorPasso = 0;
             projeteis.clear();
             criarInvasores();
+            criarBarreiras();
             System.out.println("[servidor] Nível " + nivel);
         }
     }
