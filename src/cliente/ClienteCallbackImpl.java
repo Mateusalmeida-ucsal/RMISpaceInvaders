@@ -9,11 +9,6 @@ import javax.swing.JComponent;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
-/**
- * Objeto remoto exportado pelo cliente. O servidor chama atualizarEstado()
- * ~30 vezes por segundo; aqui só guardamos o último snapshot e pedimos
- * para a tela redesenhar. Nenhuma regra do jogo roda no cliente.
- */
 public class ClienteCallbackImpl extends UnicastRemoteObject implements ClientCallback {
 
     private static final long serialVersionUID = 1L;
@@ -36,10 +31,6 @@ public class ClienteCallbackImpl extends UnicastRemoteObject implements ClientCa
         }
     }
 
-    /**
-     * Toca os efeitos dos eventos recebidos e controla a trilha: ela começa quando a
-     * partida passa a EM_ANDAMENTO e para quando a partida deixa de estar em andamento.
-     */
     private synchronized void tratarAudio(EstadoJogo snapshot) {
         for (Evento evento : snapshot.eventos) {
             Audio.tocar(evento);

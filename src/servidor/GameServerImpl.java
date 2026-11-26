@@ -23,20 +23,9 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-/**
- * Objeto remoto do jogo. Guarda TODO o estado da partida.
- *
- * Concorrência: o RMI atende cada chamada em uma thread diferente, e o game loop
- * roda em outra thread. Tudo que lê ou altera o estado fica dentro de
- * synchronized (trava). Chamadas REMOTAS (callbacks) nunca são feitas dentro
- * da região sincronizada, para um cliente lento não travar o jogo.
- */
 public class GameServerImpl extends UnicastRemoteObject implements GameService {
 
     private static final long serialVersionUID = 1L;
-
-    /** Dados de uma conexão: o jogador, o callback remoto e controle de envio. */
     private static class Sessao {
         final Jogador jogador;
         final ClientCallback callback;
@@ -48,8 +37,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             this.callback = callback;
         }
     }
-
-    // ---- Estado compartilhado (protegido por "trava") ----
     private final Object trava = new Object();
     private final Map<Integer, Sessao> sessoes = new HashMap<>();
     private final List<Invasor> invasores = new ArrayList<>();
@@ -61,8 +48,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
     private int nivel = 1;
     private int direcaoInvasores = 1;   // 1 = direita, -1 = esquerda
     private int contadorPasso = 0;
-
-    // ---- Fora do estado do jogo ----
     private final Random random = new Random();
     private final ExecutorService envio = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "envio-callback");
@@ -76,11 +61,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         loop.setDaemon(true);
         loop.start();
     }
-
-    // =====================================================================
-    // Métodos remotos
-    // =====================================================================
-
     @Override
     public int conectarJogador(ClientCallback callback) throws RemoteException {
         if (callback == null) {
@@ -107,7 +87,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                     mensagem = "Aguardando oponente...";
                 }
             } else {
-                // ENCERRADA: o novo jogador entra na tela de fim e pode pedir reinício
                 mensagem = "Partida encerrada. Peça um novo jogo.";
             }
             return id;
@@ -121,7 +100,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         }
         synchronized (trava) {
             Sessao s = sessoes.get(idJogador);
-            // Validações: jogador existe, partida em andamento, nave viva
             if (s == null || estado != EstadoPartida.EM_ANDAMENTO || !s.jogador.viva) {
                 return;
             }
@@ -172,11 +150,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
     public void desconectarJogador(int idJogador) throws RemoteException {
         tratarDesconexao(idJogador, "saiu da partida");
     }
-
-    // =====================================================================
-    // Controle de sessões / ciclo da partida (sempre chamados com a trava)
-    // =====================================================================
-
     private int proximoIdLivre() {
         for (int id = 1; id <= 2; id++) {
             if (!sessoes.containsKey(id)) {
@@ -221,8 +194,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    /** Distribui as barreiras igualmente na largura do campo. */
     private void criarBarreiras() {
         barreiras.clear();
         int espaco = Constantes.LARGURA / Constantes.BARREIRA_QTD;
@@ -237,7 +208,7 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         synchronized (trava) {
             Sessao removida = sessoes.remove(idJogador);
             if (removida == null) {
-                return; // já tinha sido removido (evita tratar duas vezes)
+                return;
             }
             System.out.println("[servidor] Jogador " + idJogador + " " + motivo + ".");
 
@@ -252,7 +223,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
 
             if (sessoes.isEmpty()) {
-                // ninguém sobrou: volta ao estado inicial
                 estado = EstadoPartida.AGUARDANDO_JOGADORES;
                 mensagem = "Aguardando jogadores...";
                 invasores.clear();
@@ -262,11 +232,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    // =====================================================================
-    // Game loop
-    // =====================================================================
-
     private void gameLoop() {
         while (true) {
             long inicio = System.currentTimeMillis();
@@ -281,10 +246,9 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                     snapshot = criarSnapshot();
                     destinatarios = new ArrayList<>(sessoes.values());
                 }
-                eventos.clear(); // cada evento vai em um único snapshot
+                eventos.clear();
             }
 
-            // Fora da região sincronizada: chamadas remotas
             if (snapshot != null) {
                 for (Sessao s : destinatarios) {
                     notificar(s, snapshot);
@@ -299,11 +263,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    /**
-     * Envia o snapshot em outra thread. Se o envio anterior a esse cliente ainda
-     * não terminou, pula este quadro (cliente lento não acumula fila nem trava o loop).
-     */
     private void notificar(Sessao s, EstadoJogo snapshot) {
         if (!s.enviando.compareAndSet(false, true)) {
             return;
@@ -318,8 +277,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         });
     }
-
-    // Chamado dentro de synchronized (trava)
     private EstadoJogo criarSnapshot() {
         EstadoJogo snap = new EstadoJogo(estado, nivel, mensagem);
         for (Sessao s : sessoes.values()) {
@@ -337,10 +294,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         snap.eventos.addAll(eventos);
         return snap;
     }
-
-    // =====================================================================
-    // Regras do jogo (um tick) — chamados dentro de synchronized (trava)
-    // =====================================================================
 
     private void atualizarJogo() {
         for (Sessao s : sessoes.values()) {
@@ -370,8 +323,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    /** Os invasores aceleram quando restam poucos e conforme o nível sobe. */
     private void moverInvasores() {
         contadorPasso++;
         int total = Constantes.INV_LINHAS * Constantes.INV_COLUNAS;
@@ -400,8 +351,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    /** Só o invasor mais baixo de cada coluna pode atirar, como no original. */
     private void invasoresAtiram() {
         int tirosInvasor = 0;
         for (Projetil p : projeteis) {
@@ -438,15 +387,12 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         Iterator<Projetil> itP = projeteis.iterator();
         while (itP.hasNext()) {
             Projetil p = itP.next();
-
-            // qualquer tiro (de jogador ou de invasor) é parado pela barreira
             if (tiroAtingiuBarreira(p)) {
                 itP.remove();
                 continue;
             }
 
             if (p.isDoJogador()) {
-                // tiro do jogador x invasores
                 Iterator<Invasor> itI = invasores.iterator();
                 while (itI.hasNext()) {
                     Invasor i = itI.next();
@@ -463,7 +409,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
                     }
                 }
             } else {
-                // tiro do invasor x naves
                 for (Sessao s : sessoes.values()) {
                     Jogador j = s.jogador;
                     if (!j.viva || j.isInvulneravel()) {
@@ -486,11 +431,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    /**
-     * Procura a célula viva de barreira mais "à frente" do tiro (a primeira que ele
-     * encontraria) e destrói um pedaço ao redor dela. Retorna true se houve acerto.
-     */
     private boolean tiroAtingiuBarreira(Projetil p) {
         final int cel = Constantes.BARREIRA_CELULA;
         for (Barreira b : barreiras) {
@@ -504,9 +444,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             int linIni = Math.max(0, Math.floorDiv(p.y - b.y, cel));
             int linFim = Math.min(Constantes.BARREIRA_LINHAS - 1,
                     Math.floorDiv(p.y + Constantes.TIRO_ALTURA - 1 - b.y, cel));
-
-            // tiro do jogador sobe (encontra primeiro as linhas de baixo);
-            // tiro do invasor desce (encontra primeiro as linhas de cima)
             boolean sobe = p.isDoJogador();
             int linha = sobe ? linFim : linIni;
             while (sobe ? linha >= linIni : linha <= linFim) {
@@ -521,8 +458,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
         }
         return false;
     }
-
-    /** Destrói um "buraco" irregular em volta do ponto de impacto. */
     private void erodirBarreira(Barreira b, int colCentro, int linCentro) {
         for (int dy = -2; dy <= 2; dy++) {
             for (int dx = -2; dx <= 2; dx++) {
@@ -533,8 +468,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             }
         }
     }
-
-    /** Invasor que encosta na barreira apaga tudo que ele toca. */
     private void invasoresDestroemBarreiras() {
         final int cel = Constantes.BARREIRA_CELULA;
         for (Invasor i : invasores) {
@@ -559,14 +492,12 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
     }
 
     private void verificarFimOuProximaOnda() {
-        // 1) invasores chegaram na altura das naves
         for (Invasor i : invasores) {
             if (i.y + Constantes.INV_ALTURA >= Constantes.NAVE_Y) {
                 encerrarPartida("Os invasores chegaram à Terra!");
                 return;
             }
         }
-        // 2) todas as naves destruídas
         boolean algumaViva = false;
         for (Sessao s : sessoes.values()) {
             if (s.jogador.viva) {
@@ -577,7 +508,6 @@ public class GameServerImpl extends UnicastRemoteObject implements GameService {
             encerrarPartida("Todas as naves foram destruídas!");
             return;
         }
-        // 3) onda derrotada: próximo nível
         if (invasores.isEmpty()) {
             nivel++;
             direcaoInvasores = 1;

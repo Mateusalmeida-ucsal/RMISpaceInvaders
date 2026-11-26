@@ -12,12 +12,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-
-/**
- * Cliente de console para testar o backend sem interface gráfica.
- * Cria 2 "bots" que jogam sozinhos e imprime o estado a cada segundo.
- * Uso: java teste.ClienteTeste [host] [desconectar]
- */
 public class ClienteTeste {
 
     static class Bot extends UnicastRemoteObject implements ClientCallback {
@@ -55,8 +49,6 @@ public class ClienteTeste {
         b1.id = svc.conectarJogador(b1);
         b2.id = svc.conectarJogador(b2);
         System.out.println("IDs recebidos: " + b1.id + " e " + b2.id);
-
-        // terceiro cliente deve ser recusado
         Bot b3 = new Bot();
         System.out.println("Terceiro jogador recebeu id: " + svc.conectarJogador(b3) + " (esperado -1)");
 

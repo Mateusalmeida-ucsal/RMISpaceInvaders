@@ -8,30 +8,15 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import java.io.File;
 
-/**
- * Efeitos sonoros e trilha do jogo (Java Sound, sem bibliotecas externas).
- *
- * VOLUMES: ficam todos aqui em cima, em decibéis (dB), relativos ao arquivo original.
- *   0 dB = volume original do arquivo; valores NEGATIVOS diminuem o volume.
- *   Os arquivos dos efeitos estão gravados no volume máximo, por isso o ganho é bem negativo.
- *   Nunca use valores positivos (a classe os limita a 0 dB).
- * O ganho é aplicado direto nas amostras ao carregar, então não depende do
- * controle de volume da placa de som e o resultado é o mesmo em qualquer PC.
- *
- * Se algo falhar (arquivo ausente, PC sem placa de som), o jogo continua sem som.
- */
 public final class Audio {
 
-    // ---- Volumes (dB) ----
     static final double GANHO_MUSICA_DB = -9;
-    static final double GANHO_TIRO_DB = -20;
+    static final double GANHO_TIRO_DB = -30;
     static final double GANHO_INVASOR_MORTO_DB = -16;
     static final double GANHO_EXPLOSAO_DB = -13;
 
-    /** Intervalo mínimo entre duas execuções do mesmo efeito (evita "metralhadora" de sons). */
     private static final long INTERVALO_MIN_MS = 50;
 
-    /** Pasta com os .wav, relativa à pasta de onde o programa é executado. */
     private static final String PASTA_SONS = "sons";
 
     private static class Som {
@@ -43,7 +28,6 @@ public final class Audio {
         }
     }
 
-    /** Áudio já convertido para PCM 16 bits e com o ganho aplicado. */
     static class Pcm {
         final AudioFormat formato;
         final byte[] dados;
@@ -65,7 +49,6 @@ public final class Audio {
 
     private Audio() { }
 
-    /** Carrega os sons. Chame antes de conectar ao servidor. */
     public static synchronized void iniciar() {
         try {
             tiro = carregar("shoot.wav", GANHO_TIRO_DB);
@@ -79,7 +62,6 @@ public final class Audio {
         }
     }
 
-    /** Toca o efeito correspondente a um evento do jogo. */
     public static synchronized void tocar(Evento evento) {
         if (!ativo || mudo) {
             return;
@@ -100,7 +82,6 @@ public final class Audio {
         }
     }
 
-    /** Começa a trilha do início, em loop. */
     public static synchronized void iniciarMusica() {
         musicaDeveTocar = true;
         if (!ativo || mudo) {
@@ -130,7 +111,7 @@ public final class Audio {
             invasorMorto.clip.stop();
             explosao.clip.stop();
         } else if (musicaDeveTocar) {
-            musica.clip.loop(Clip.LOOP_CONTINUOUSLY); // continua de onde parou
+            musica.clip.loop(Clip.LOOP_CONTINUOUSLY);
         }
     }
 
@@ -151,12 +132,6 @@ public final class Audio {
         }
     }
 
-    // ------------------------------------------------------------------
-
-    /**
-     * Cada efeito reinicia a si mesmo se for disparado de novo. Assim nunca existem
-     * duas cópias do mesmo som somando volume.
-     */
     private static void executar(Som s) {
         long agora = System.currentTimeMillis();
         if (s == null || agora - s.ultimaExecucao < INTERVALO_MIN_MS) {
@@ -180,10 +155,9 @@ public final class Audio {
         return new Som(clip);
     }
 
-    /** Lê o WAV, converte para PCM 16 bits e aplica o ganho (em dB) nas amostras. */
     static Pcm lerPcm(File arquivo, double ganhoDb) throws Exception {
         if (ganhoDb > 0) {
-            ganhoDb = 0; // trava de segurança: nunca amplificar
+            ganhoDb = 0;
         }
         try (AudioInputStream original = AudioSystem.getAudioInputStream(arquivo)) {
             AudioFormat o = original.getFormat();
@@ -198,7 +172,6 @@ public final class Audio {
         }
     }
 
-    /** Multiplica cada amostra de 16 bits (little-endian) pelo ganho linear. */
     private static void aplicarGanho(byte[] dados, double ganhoDb) {
         double fator = Math.pow(10.0, ganhoDb / 20.0);
         for (int i = 0; i + 1 < dados.length; i += 2) {

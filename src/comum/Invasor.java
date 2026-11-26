@@ -1,8 +1,6 @@
 package comum;
 
 import java.io.Serializable;
-
-/** Um alienígena. tipo 0 = linha de cima (30 pts), 1 = 20 pts, 2 = 10 pts. */
 public class Invasor implements Serializable {
     private static final long serialVersionUID = 1L;
 

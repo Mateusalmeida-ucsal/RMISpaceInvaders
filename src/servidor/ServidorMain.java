@@ -6,14 +6,8 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.ExportException;
 
-/**
- * Sobe o servidor.
- * Uso: java servidor.ServidorMain [ip-do-servidor]
- * Em rede local, passe o IP da máquina para os clientes conseguirem chamar de volta.
- */
 public class ServidorMain {
 
-    // referência estática para o Registry local não ser coletado pelo GC
     private static Registry registry;
 
     public static void main(String[] args) {
@@ -22,7 +16,6 @@ public class ServidorMain {
                 System.setProperty("java.rmi.server.hostname", args[0]);
                 System.out.println("[servidor] hostname RMI: " + args[0]);
             }
-            // Timeouts nas chamadas de saída (callbacks): cliente travado não prende o servidor
             System.setProperty("sun.rmi.transport.tcp.readTimeout", "5000");
             System.setProperty("sun.rmi.transport.proxy.connectTimeout", "3000");
 

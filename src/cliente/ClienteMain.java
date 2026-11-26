@@ -15,18 +15,13 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 
-/**
- * Inicia o cliente: pede o IP do servidor, localiza o serviço no RMI Registry
- * (lookup), registra o callback e abre a janela do jogo.
- * Uso: java cliente.ClienteMain [ip-do-servidor]
- */
 public class ClienteMain {
 
     public static void main(String[] args) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
-            // segue com o visual padrão
+
         }
 
         String padrao = args.length > 0 ? args[0] : "localhost";
@@ -36,14 +31,10 @@ public class ClienteMain {
         }
         host = host.trim();
 
-        // Os sons precisam estar prontos antes de conectar: assim que o 2º jogador entra,
-        // o servidor já começa a partida e a trilha deve tocar desde o primeiro quadro.
         Audio.iniciar();
 
         ClienteCallbackImpl callback = null;
         try {
-            // O servidor chama o cliente de volta (callback), então o cliente precisa
-            // anunciar o IP certo da própria máquina. Isso deve vir ANTES de exportar o callback.
             System.setProperty("java.rmi.server.hostname", descobrirIpLocal(host));
 
             Registry registry = LocateRegistry.getRegistry(host, Constantes.PORTA_REGISTRY);
@@ -99,7 +90,6 @@ public class ClienteMain {
         tela.iniciarEnvio();
     }
 
-    /** Descobre qual IP local é usado para falar com o servidor (sem enviar nada na rede). */
     private static String descobrirIpLocal(String host) {
         try (DatagramSocket s = new DatagramSocket()) {
             s.connect(InetAddress.getByName(host), Constantes.PORTA_REGISTRY);

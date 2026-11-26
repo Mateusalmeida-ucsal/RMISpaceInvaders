@@ -2,15 +2,8 @@ package comum;
 
 import java.io.Serializable;
 
-/**
- * Barreira (bunker). É uma grade de "pixels" (células) que pode ser destruída
- * aos poucos por tiros e pelos invasores, como no jogo original.
- * As células ficam em um vetor simples: índice = linha * COLUNAS + coluna.
- */
 public class Barreira implements Serializable {
     private static final long serialVersionUID = 1L;
-
-    // Formato do bunker: 22 colunas x 16 linhas ('X' = pedaço de barreira)
     private static final String[] FORMA = {
         "....XXXXXXXXXXXXXX....",
         "...XXXXXXXXXXXXXXXX...",
@@ -33,8 +26,6 @@ public class Barreira implements Serializable {
     public final int x;
     public final int y;
     public final boolean[] celulas = new boolean[Constantes.BARREIRA_COLUNAS * Constantes.BARREIRA_LINHAS];
-
-    /** Cria uma barreira inteira na posição (x, y). */
     public Barreira(int x, int y) {
         this.x = x;
         this.y = y;
@@ -44,8 +35,6 @@ public class Barreira implements Serializable {
             }
         }
     }
-
-    /** Cópia, usada para montar o snapshot. */
     public Barreira(Barreira o) {
         this.x = o.x;
         this.y = o.y;

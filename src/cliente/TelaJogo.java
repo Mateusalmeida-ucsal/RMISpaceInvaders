@@ -23,10 +23,6 @@ import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.rmi.RemoteException;
 
-/**
- * Tela do jogo: desenha o snapshot recebido e lê o teclado.
- * Teclas: setas ou A/D movem, ESPAÇO atira, ENTER pede nova partida.
- */
 public class TelaJogo extends JPanel {
 
     private static final long serialVersionUID = 1L;
@@ -54,7 +50,7 @@ public class TelaJogo extends JPanel {
     private static final Color COR_J1 = new Color(0, 255, 0);
     private static final Color COR_J2 = new Color(0, 220, 255);
     private static final Color COR_TEXTO = Color.WHITE;
-    private static final Color COR_BARREIRA = Color.WHITE; // troque por new Color(0, 255, 0) para barreira verde
+    private static final Color COR_BARREIRA = Color.WHITE;
 
     private static final BufferedImage[][] INVASORES = new BufferedImage[3][2];
     private static final BufferedImage CANHAO_J1 = criarSprite(CANHAO_PIXELS, COR_J1);
@@ -80,7 +76,6 @@ public class TelaJogo extends JPanel {
         return img;
     }
 
-    // ---------- Estado do cliente ----------
     private final GameService servico;
     private final ClienteCallbackImpl callback;
     private final int meuId;
@@ -141,11 +136,6 @@ public class TelaJogo extends JPanel {
         }
     }
 
-    // ---------- Envio de jogadas ----------
-    /**
-     * Thread que lê as teclas e chama o servidor (stub). Roda fora da thread de
-     * interface para uma chamada remota lenta nunca congelar a tela.
-     */
     public void iniciarEnvio() {
         Thread t = new Thread(() -> {
             while (rodando) {
@@ -180,24 +170,20 @@ public class TelaJogo extends JPanel {
         t.start();
     }
 
-    /** Chamado ao fechar a janela. */
     public void encerrar() {
         rodando = false;
         try {
             servico.desconectarJogador(meuId);
         } catch (RemoteException e) {
-            // servidor já indisponível; nada a fazer
         }
     }
 
-    // ---------- Desenho ----------
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         desenhar((Graphics2D) g, getWidth(), getHeight());
     }
 
-    /** Separado de paintComponent para poder ser testado fora da janela. */
     void desenhar(Graphics2D g, int largura, int altura) {
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, largura, altura);
@@ -253,7 +239,6 @@ public class TelaJogo extends JPanel {
             textoCentral(g, "SOM DESLIGADO (M)", 590, 14, Color.GRAY);
         }
 
-        // linha do chão e vidas (um canhãozinho por vida, como no original)
         g.setColor(COR_J1);
         g.fillRect(0, 565, Constantes.LARGURA, 2);
         if (j1 != null) {
@@ -283,7 +268,7 @@ public class TelaJogo extends JPanel {
                         col++;
                         continue;
                     }
-                    int inicio = col; // junta células vizinhas da mesma linha em um retângulo só
+                    int inicio = col;
                     while (col < Constantes.BARREIRA_COLUNAS && b.viva(col, lin)) {
                         col++;
                     }
@@ -295,7 +280,6 @@ public class TelaJogo extends JPanel {
 
     private void desenharElementos(Graphics2D g, EstadoJogo e) {
         desenharBarreiras(g, e);
-        // Invasores: o quadro de animação alterna a cada passo (posição x muda de 10 em 10)
         for (Invasor i : e.invasores) {
             int frame = Math.abs(i.x / Constantes.INV_PASSO_X) % 2;
             g.drawImage(INVASORES[i.tipo][frame], i.x, i.y, Constantes.INV_LARGURA, Constantes.INV_ALTURA, null);

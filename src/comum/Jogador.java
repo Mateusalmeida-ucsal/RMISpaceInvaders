@@ -1,8 +1,6 @@
 package comum;
 
 import java.io.Serializable;
-
-/** Dados de um jogador. Vai dentro do snapshot enviado aos clientes. */
 public class Jogador implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -25,8 +23,6 @@ public class Jogador implements Serializable {
         this.pediuReinicio = false;
         this.invulneravelTicks = 0;
     }
-
-    /** Construtor de cópia, usado para montar o snapshot. */
     public Jogador(Jogador o) {
         this.id = o.id;
         this.x = o.x;
